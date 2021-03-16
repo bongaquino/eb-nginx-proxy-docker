@@ -1,20 +1,28 @@
 version: 0.2
+
 phases:
-  install:
-    commands:
-      - echo install n-compass... 
   pre_build:
     commands:
-      - echo logging in to AWS ECR...
-      - $(aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin 892444632159.dkr.ecr.us-east-1.amazonaws.com)
+      - echo Logging in to Amazon ECR...
+      - aws --version
+      - $(aws ecr get-login --region $AWS_DEFAULT_REGION --no-include-email)
+      - REPOSITORY_URI=892444632159.dkr.ecr.us-east-1.amazonaws.com/nc-nvir-dev-ecr-01
+      - COMMIT_HASH=$(echo $CODEBUILD_RESOLVED_SOURCE_VERSION | cut -c 1-7)
+      - IMAGE_TAG=build-$(echo $CODEBUILD_BUILD_ID | awk -F":" '{print $2}')
   build:
     commands:
-      - echo build Docker image on `date`
-      - cd src
-      - docker build -t nc-nvir-dev-ecr-01:latest .
-      - docker tag nc-nvir-dev-ecr-01:latest 892444632159.dkr.ecr.us-east-1.amazonaws.com/nc-nvir-dev-ecr-01:latest
+      - echo Build started on `date`
+      - echo Building the Docker image...
+      - docker build -t $REPOSITORY_URI:latest .
+      - docker tag $REPOSITORY_URI:latest $REPOSITORY_URI:$IMAGE_TAG
   post_build:
     commands:
-      - echo build Docker image complete `date`
-      - echo push latest Docker images to ECR...
-      - docker push 892444632159.dkr.ecr.us-east-1.amazonaws.com/nc-nvir-dev-ecr-01:latest
+      - echo Build completed on `date`
+      - echo Pushing the Docker images...
+      - docker push $REPOSITORY_URI:latest
+      - docker push $REPOSITORY_URI:$IMAGE_TAG
+      - echo Writing image definitions file...
+      - printf '[{"name":"nodeapp","imageUri":"%s"}]' $REPOSITORY_URI:$IMAGE_TAG > imagedefinitions.json
+      - cat imagedefinitions.json 
+artifacts:
+    files: imagedefinitions.json
